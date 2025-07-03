@@ -19,20 +19,14 @@ class RAG:
         system_prompt (str): A predefined prompt to prepend to each input.
     """
 
-    def __init__(self, retriever, language_model, system_prompt, repeat_system_prompt, top_k_docs, expand_query, top_k_titles, stride, query_len, do_sample, temperature, top_p, num_beams, max_new_tokens, batch_size, kb_10K, icl_kb, icl_kb_incorrect, focus):
+    def __init__(self, retriever, language_model, system_prompt, repeat_system_prompt, top_k_docs, stride, query_len, do_sample, temperature, top_p, num_beams, max_new_tokens, batch_size):
         self.retriever = retriever
         self.language_model = language_model
 
         self.system_prompt = system_prompt
         self.repeat_system_prompt = repeat_system_prompt
 
-        self.retrieval_kwargs = {
-            "k": top_k_docs,
-            "expand_query": expand_query,
-            "k_titles": top_k_titles,
-            "focus": focus
-        }
-
+        self.k = top_k_docs
         self.do_sample = do_sample
         self.temperature = temperature
         self.top_p = top_p
@@ -41,30 +35,14 @@ class RAG:
         self.query_len = query_len
         self.max_new_tokens = max_new_tokens
         self.batch_size = batch_size
-        self.Kb_10K = kb_10K
-        self.icl_kb = icl_kb
-        self.icl_kb_incorrect = icl_kb_incorrect
-        self.focus= focus
 
-    def _prompt_template(self, query, docs_text, docs_correct_answer, docs_incorrect_answer):
+    def _prompt_template(self, query, docs_text):
         if docs_text:
-            # Format the prompt based on the type of knowledge base
-            if not self.icl_kb:
-                system_prompt = self.system_prompt + " considering these information\n" if self.system_prompt else ""
-                repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
-                docs_str = "\n".join("- " + re.sub(r'[\t\n\r\f\v]', ' ', doc) for doc in docs_text) + "\n---\n"
-                rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query} Answer:"
-            else:
-                system_prompt = self.system_prompt + " considering these examples\n" if self.system_prompt else ""
-                repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
-                if self.icl_kb_incorrect:
-                    docs_str = "\n".join("- Question:" + question + ", Correct Answer:" + str(correct) + "\n- Question:" + question + ", Incorrect Answer:" + str(incorrect) for question, correct, incorrect  in zip(docs_text, docs_correct_answer, docs_incorrect_answer)) + "\n---\n"
-                else:
-                    docs_str = "\n".join("- Question:" + question + ", Correct Answer:" + str(correct) for question, correct  in zip(docs_text, docs_correct_answer)) + "\n---\n"
-                rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
-        else:
-            system_prompt = self.system_prompt + "\n" if self.system_prompt else ""
-            rag_prompt = f"{system_prompt}Question:{query} Answer:"
+            # Format the prompt for the CICL document based context
+            system_prompt = self.system_prompt + " considering these contexts\n" if self.system_prompt else ""
+            repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
+            docs_str = "\n".join("Correct Context:" + re.sub(r'[\t\n\r\f\v]', ' ', docs_text[0]) + "Incorrect Context:" + re.sub(r'[\t\n\r\f\v]', ' ', docs_text[1])) + "\n---\n"
+            rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
         return self.language_model.instruct_start + rag_prompt + self.language_model.instruct_end
 
 
@@ -120,7 +98,7 @@ class RAG:
 
         Args:
             query_batch (list[str]): The input queries.
-            top_k_docs (int): Number of top relevant documents to retrieve.
+            k (int): Number of the kth document retrieved to be used in the incorrect context.
             max_new_tokens (int): Maximum token length of the response.
             query_length is measured in chars
 
@@ -129,11 +107,8 @@ class RAG:
         """
         stride = self.stride if self.stride > 0 else self.max_new_tokens
 
-        retrieval_kwargs = self.retrieval_kwargs
-        if self.icl_kb:
-            retrieval_kwargs['icl_kb_idx_batch'] = [self._query_idx(query) for query in query_batch]
         # Retrieve documents
-        docs_batch = self.retriever.retrieve(query_batch, **retrieval_kwargs)
+        docs_batch = self.retriever.retrieve(query_batch, self.k)
         context_batch = self._format_context(query_batch, docs_batch)
 
         responses_enc = [[] for _ in query_batch]
@@ -144,7 +119,7 @@ class RAG:
             # Expand the query with the generated response from the previous stride
             query_reponse_batch = [(q+" "+self.language_model.tokenizer.decode(r))[-self.query_len:] for q, r in zip(query_batch, responses_enc)]
             # Retrieve documents based on the expanded query
-            docs_batch = self.retriever.retrieve(query_reponse_batch, **retrieval_kwargs)
+            docs_batch = self.retriever.retrieve(query_reponse_batch, self.k)
             # Format context
             _context_batch = self._format_context(query_batch, docs_batch)
             running_context_batch = [c+self.language_model.tokenizer.decode(r) for c, r in zip(_context_batch, responses_enc)]
@@ -166,7 +141,7 @@ class RAG:
 
     def _format_context(self, queries, retrieved_docs):
         """
-        Formats the input for the language model by combining retrieved docuemnts with queries.
+        Formats the input for the language model by combining retrieved documents with queries.
 
         Args:
             queries (list[str]): A list of query dictionaries.
@@ -178,11 +153,7 @@ class RAG:
         input_texts = []
         for docs, query in zip(retrieved_docs, queries):
             docs_text = [doc['text'] for doc in docs]
-            docs_correct_answer, docs_incorrect_answer = None, None
-            if self.icl_kb:
-                docs_correct_answer = [doc['correct_answer'] for doc in docs]
-                docs_incorrect_answer = [doc['incorrect_answer'] for doc in docs]
-            formatted_input = self._prompt_template(query, docs_text, docs_correct_answer, docs_incorrect_answer)
+            formatted_input = self._prompt_template(query, docs_text)
             input_texts.append(formatted_input)
         return input_texts
 

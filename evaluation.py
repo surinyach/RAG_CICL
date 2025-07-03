@@ -16,7 +16,7 @@ from model.model_loader import ModelLoader
 from model.rag import RAG
 from model.retriever import Retriever
 
-from config import configs_run1, configs_run2
+from config import cicl_config
 
 # Argument parsing
 def parse_args():
@@ -40,26 +40,26 @@ def set_random_seed(seed):
     
 # Initialize index builder
 def initialize_index_builder(knowledge_base, config):
-    index_builder = IndexBuilder(knowledge_base, config['embedding_model_name'], config['ralm']['expand_query'], **config['index_builder'])
+    index_builder = IndexBuilder(knowledge_base, config['embedding_model_name'], **config['index_builder'])
     return index_builder.initialize_components()
 
 # Initialize RAG model
-def initialize_rag(knowledge_base, config, model_loader_generation, model_loader_seq2seq, index_pre, same_index, first_run):
+def initialize_rag(knowledge_base, config, model_loader_generation, index_pre, same_index, first_run):
     build_index = not same_index or first_run
 
     # Initialize index builder if needed
     if build_index:
-        index, index_titles, doc_info = initialize_index_builder(knowledge_base, config)
+        index, doc_info = initialize_index_builder(knowledge_base, config)
     else:
-        index, index_titles, doc_info = index_pre[0], index_pre[1], index_pre[2]
-    retriever = Retriever(index, doc_info, config['embedding_model_name'], model_loader_seq2seq, index_titles)
+        index, doc_info = index_pre[0], index_pre[1]
+    retriever = Retriever(index, doc_info, config['embedding_model_name'])
     language_model = LanguageModel(model_loader_generation, config['is_chat_model'], config['instruct_tokens'])
     if not same_index:
-        del index, index_titles, doc_info
+        del index, doc_info
         gc.collect()
         index_pre = None
     else:
-        index_pre = (index, index_titles, doc_info)
+        index_pre = (index, doc_info)
     return RAG(retriever, language_model, **config['ralm']), index_pre
 
     
@@ -112,53 +112,47 @@ if __name__ == "__main__":
     knowledge_base = pd.read_pickle('resources/articles_l3.pkl')
     all_results = {}
 
-    # Evaluate all configurations
-    for configs, run in zip([configs_run1, configs_run2],[1, 2]):
-        time = datetime.now().strftime("%m-%d_%H-%M")
-        results_dir = f'{args.output_dir}/{args.dataset}/run{run}_{time}'
+    # Evaluate the cicl configuration
+    time = datetime.now().strftime("%m-%d_%H-%M")
+    results_dir = f'{args.output_dir}/{args.dataset}/run_{time}'
 
-        os.makedirs(results_dir, exist_ok=True)
-        index_configs = [c['index_builder'] for c in configs.values()]
-        same_index = all(ic == index_configs[0] for ic in index_configs)
-        index_pre = None
-        first_run = True
+    os.makedirs(results_dir, exist_ok=True)
+    index_configs = [c['index_builder'] for c in cicl_config.values()]
+    same_index = all(ic == index_configs[0] for ic in index_configs)
+    index_pre = None
+    first_run = True
+    
+    evaluations = {}
+    name = "CICL"
+    for config in cicl_config.items():
+        # Initialize model loaders
+        model_loader_generation = ModelLoader(config['generation_model_name'], 'causal', quant_type='4bit')
         
-        evaluations = {}
-        for name, config in configs.items():
-            # Initialize model loaders
-            model_loader_generation = ModelLoader(config['generation_model_name'], 'causal', quant_type='4bit')
-            model_loader_seq2seq = ModelLoader(config['seq2seq_model_name'], 'seq2seq', quant_type='4bit')
-            
-            # Load knowledge base
-            if config['ralm']['icl_kb']:
-                kb = test_data
-            elif config['ralm']['kb_10K']:
-                kb = pd.read_pickle('./resources/articles_l4.pkl')
-            else:
-                kb = knowledge_base
-            
-            ralm, index_pre = initialize_rag(kb, config, model_loader_generation, model_loader_seq2seq, index_pre, same_index, first_run)
-            print(f"Evaluating model: {name}")
-            evaluations[name], mauve_score = ralm.evaluate(test_data)
+        # Load knowledge base
+        kb = knowledge_base
         
-            del ralm
-            del model_loader_generation
-            del model_loader_seq2seq
-            gc.collect()
-            torch.cuda.empty_cache()
-            first_run = False
-            
-            # Save evaluation results
-            evaluations[name].to_pickle(os.path.join(results_dir, f'evaluation_{name}.pkl'))
-            with open(os.path.join(results_dir, f'config_{name}.json'), 'w') as f:
-                json.dump(configs[name], f, indent=4)
+        ralm, index_pre = initialize_rag(kb, config, model_loader_generation, index_pre, same_index, first_run)
+        print(f"Evaluating model: {name}")
+        evaluations[name], mauve_score = ralm.evaluate(test_data)
+    
+        del ralm
+        del model_loader_generation
+        gc.collect()
+        torch.cuda.empty_cache()
+        first_run = False
         
-            results = mean_metrics_item(evaluations[name])
-            results['mauve'] = mauve_score
+        # Save evaluation results
+        evaluations[name].to_pickle(os.path.join(results_dir, f'evaluation_{name}.pkl'))
+        with open(os.path.join(results_dir, f'config_{name}.json'), 'w') as f:
+            json.dump(config[name], f, indent=4)
+    
+        results = mean_metrics_item(evaluations[name])
+        results['mauve'] = mauve_score
 
-            with open(f"{results_dir}/eval_results_{name}.json", "w") as outfile: 
-                json.dump(results, outfile)   
-            all_results[name] = results
+        with open(f"{results_dir}/eval_results_{name}.json", "w") as outfile: 
+            json.dump(results, outfile)   
+        all_results[name] = results
+
         del index_pre
                 
         with open(f"{results_dir}/eval_results_all.json", "w") as outfile: 

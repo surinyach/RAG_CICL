@@ -28,25 +28,13 @@ class IndexBuilder:
         corpus (list of gensim.matutils.SparseVector): Gensim corpus representing documents as bag-of-words vectors.
     """
 
-    def __init__(self, documents_df, embedding_model_name, expand_query, tokenizer_model_name, chunk_size, overlap, passes, icl_kb, multi_lingo):
+    def __init__(self, documents_df, embedding_model_name, tokenizer_model_name, chunk_size, overlap, passes):
         """
         Initializes the IndexBuilder class with necessary components.
         """
-        self.expand_query = expand_query
-        self.icl_kb = icl_kb
-        self.multi_lingo = multi_lingo
-
-        if self.icl_kb:
-            self.documents = documents_df['question'].tolist()
-            self.titles = None
-            self.best_answers = documents_df['best_answer'].tolist()
-            self.incorrect_answers = documents_df['incorrect_answers'].tolist()
-        else:
-            self.documents = documents_df['text_en'].tolist()
-            self.documents_de = documents_df['text_de'].tolist()
-            self.documents_fr = documents_df['text_fr'].tolist()
-            self.titles = documents_df['title_en'].tolist()
-
+        
+        self.documents = documents_df['text_en'].tolist()
+        
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.embedding_model = SentenceTransformer(embedding_model_name).to(self.device)
 
@@ -81,11 +69,8 @@ class IndexBuilder:
 
         self.doc_info = None
         self.index = self._build_index()
-        self.title_index = None   
-        if self.expand_query:
-            self.title_index = self._build_title_index() if not self.icl_kb else None  
-
-        return self.index, self.title_index, self.doc_info
+    
+        return self.index, self.doc_info
 
     def _check_chunk_size(self, tolerance_ratio=0.1):
         """
@@ -99,20 +84,6 @@ class IndexBuilder:
 
         if total_length > self.embedding_model.get_max_seq_length() * (1 - tolerance_ratio):
             raise ValueError(f"Combined length of chunk exceeds the allowed maximum.")
-
-    def _build_title_index(self):
-        """
-        Builds a FAISS index for the titles.
-
-        Returns:
-            faiss.IndexFlatIP: The FAISS index for the title embeddings.
-        """
-        title_embeddings = np.array(self.embedding_model.encode(self.titles, show_progress_bar=True))
-        title_index = faiss.IndexFlatIP(title_embeddings.shape[1])
-        title_index.add(title_embeddings)
-
-        return title_index
-
 
     def _build_index(self):
         """
@@ -171,15 +142,7 @@ class IndexBuilder:
 
         for org_doc_id in range(len(self.documents)):
 
-            if self.multi_lingo:
-                doc_en = self.documents[org_doc_id]
-                doc_fr = self.documents_fr[org_doc_id]
-                doc_de = self.documents_de[org_doc_id]
-                doc = np.random.choice([doc_en, doc_fr, doc_de])
-                if not doc:
-                   doc = doc_en 
-            else:
-                doc = self.documents[org_doc_id]
+            doc = self.documents[org_doc_id]
             
             # Breaks document into chunks but we will still call them documents
             docs = self._create_chunks(doc)
@@ -187,9 +150,6 @@ class IndexBuilder:
             # Prepend same document to its chunks and store document/chunk details
             for doc in docs:
                 doc_dict = {"text": doc, "org_doc_id": org_doc_id}
-                if self.icl_kb:
-                    doc_dict['correct_answer'] = self.best_answers[org_doc_id]
-                    doc_dict['incorrect_answer'] = self.incorrect_answers[org_doc_id][0]
                 doc_info.append(doc_dict)
 
         return doc_info
@@ -217,23 +177,3 @@ class IndexBuilder:
             chunks.append(chunk_str)
 
         return chunks
-
-    def _build_corpus(self):
-        """
-        Builds a Gensim dictionary and corpus from the documents.
-        """
-        processed_docs = [self._preprocess_text(doc) for doc in self.documents]
-        self.dictionary = Dictionary(processed_docs)
-        self.corpus = [self.dictionary.doc2bow(doc) for doc in processed_docs]
-
-    def _preprocess_text(self, text):
-        """
-        Tokenizes and removes stopwords from the text.
-
-        Args:
-            text (str): Text to preprocess.
-
-        Returns:
-            List[str]: List of tokens after preprocessing.
-        """
-        return [token for token in simple_preprocess(text) if token not in STOPWORDS]
