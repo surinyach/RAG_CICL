@@ -41,7 +41,9 @@ class RAG:
             # Format the prompt for the CICL document based context
             system_prompt = self.system_prompt + " considering these contexts\n" if self.system_prompt else ""
             repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
-            docs_str = "\n".join("Correct Context:" + re.sub(r'[\t\n\r\f\v]', ' ', docs_text[0]) + "Incorrect Context:" + re.sub(r'[\t\n\r\f\v]', ' ', docs_text[1])) + "\n---\n"
+            correct = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[0]) if len(docs_text) > 0 else ""
+            incorrect = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[1]) if len(docs_text) > 1 else ""
+            docs_str = f"Correct Context:{correct}Incorrect Context:{incorrect}\n---\n"
             rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
         return self.language_model.instruct_start + rag_prompt + self.language_model.instruct_end
 
