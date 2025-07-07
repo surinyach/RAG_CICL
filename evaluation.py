@@ -137,7 +137,6 @@ if __name__ == "__main__":
     # Evaluation loop
     model_loader_generation = ModelLoader(
         cicl_config['generation_model_name'],
-        'causal',
         quant_type='4bit'
     )
 
