@@ -43,7 +43,7 @@ class RAG:
             repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
             correct = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[0]) if len(docs_text) > 0 else ""
             incorrect = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[1]) if len(docs_text) > 1 else ""
-            docs_str = f"Correct Context: {correct}. Incorrect Context: {incorrect}\n---\n"
+            docs_str = f"Positive Context: {correct}.\n\nNegative Context: {incorrect}\n---\n"
             rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
         return self.language_model.instruct_start + rag_prompt + self.language_model.instruct_end
 
