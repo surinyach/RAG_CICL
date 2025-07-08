@@ -55,7 +55,6 @@ class Retriever:
         for query_embedding in query_embeddings:
             # Search the index for similar documents, retrieve a larger set of documents
             similarities, indices = self.index.search(np.array([query_embedding]), k)
-
             # Convert 2D arrays into 1D arrays
             indices, similarities = indices[0], similarities[0]
            
