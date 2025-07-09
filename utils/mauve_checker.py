@@ -30,17 +30,13 @@ def load_gpt2_dataset(file_path, num_examples=100):
 data_dir = './data'
 os.makedirs(data_dir, exist_ok=True)
 
-webtext_url = 'https://raw.githubusercontent.com/krishnap25/mauve-experiments/main/data/webtext.valid.jsonl'
-gpt2_url = 'https://raw.githubusercontent.com/krishnap25/mauve-experiments/main/data/webtext-xl-1542M.valid.jsonl'
 webtext_path = os.path.join(data_dir, 'webtext.valid.jsonl')
 gpt2_path = os.path.join(data_dir, 'webtext-xl-1542M.valid.jsonl')
 
 if not os.path.exists(webtext_path):
-    print("Downloading WebText sample data...")
-    urlretrieve(webtext_url, webtext_path)
+   raise ValueError("The webtext data is not in the /data path")
 if not os.path.exists(gpt2_path):
-    print("Downloading GPT-2 sample data...")
-    urlretrieve(gpt2_url, gpt2_path)
+    raise ValueError("The gpt2 data is not in the /data path")
 
 # Load human (WebText) and machine (GPT-2) texts
 num_samples = 1000  # Use 1000 samples for better statistical stability (MAUVE paper uses 5000)
