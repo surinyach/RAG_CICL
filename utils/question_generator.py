@@ -4,6 +4,8 @@ import pickle
 import openai
 from tqdm import tqdm
 import json
+import os
+from dotenv import load_dotenv
 
 """
 This script generates questions and answers from the contents of a given pickle file.
@@ -17,7 +19,8 @@ as knowledge base in a Contrastive In Context Learning (CICL) RAG architecture.
 """
 
 # CONFIGURATION
-openai.api_key = ""
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 MODEL_NAME = "gpt-4"
 OUTPUT_FILE = "generated_questions.pkl"
 NUM_QUESTIONS_PER_ENTRY = 5
