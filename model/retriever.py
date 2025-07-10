@@ -22,7 +22,7 @@ class Retriever:
         embedding_model (SentenceTransformer): Model used for embedding the documents and queries.
     """
 
-    def __init__(self, index, doc_info, embedding_model_name):
+    def __init__(self, index, doc_info, embedding_model_name, generated_questions):
         """Initializes the Retriever class with necessary components.
 
         Args:
@@ -31,12 +31,13 @@ class Retriever:
             documents (list): List of original documents.
             embedding_model_name (str): Name of the sentence transformer model.
         """
+        self.generated_questions = generated_questions
         self.index = index
         self.doc_info = doc_info
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.embedding_model = SentenceTransformer(embedding_model_name).to(self.device)
 
-    def retrieve(self, query_batch, k):
+    def retrieve(self, query_batch, k, generated_questions_batch):
         """
         Retrieves the top-k most similar documents for each query in a batch of queries.
 
@@ -60,18 +61,24 @@ class Retriever:
 
             if k < 2: 
                 raise ValueError("k must be >= 2 to retrieve both most and least similar documents")
-           
-            # Get the first and the last documents
-            results_batch.append([
-                self._create_result(indices[0], similarities[0]),
-                self._create_result(indices[-1], similarities[-1])
-            ])
+            
+            if not self.generated_questions:
+                # Get the first and the last documents
+                results_batch.append([
+                    self._create_result(indices[0], similarities[0], 0),
+                    self._create_result(indices[-1], similarities[-1], 0)
+                ])
+            
+            else:
+                generated_questions = generated_questions_batch != None
+                results_batch.append()
+
 
 
         return results_batch
 
 
-    def _create_result(self, idx, score):
+    def _create_result(self, idx, score, generated_questions):
         """
         Creates/builds a result dictionary of the retrieved document.
 
@@ -83,6 +90,7 @@ class Retriever:
             dict: Dictionary containing the document text and additional information.
         """
 
+        
         doc = self.doc_info.iloc[idx]
         # Create the result dictionary
         result_dict = {
@@ -90,5 +98,9 @@ class Retriever:
             "doc_id": doc["org_doc_id"],
             "score": score
         }
+    
+        if generated_questions:
+            result_dict['correct_answer'] = doc["correct_answer"]
+            result_dict['incorrect_answer'] = doc["incorrect_answer"]
 
         return result_dict

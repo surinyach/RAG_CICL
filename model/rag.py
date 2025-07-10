@@ -19,7 +19,7 @@ class RAG:
         system_prompt (str): A predefined prompt to prepend to each input.
     """
 
-    def __init__(self, retriever, language_model, system_prompt, repeat_system_prompt, top_k_docs, stride, query_len, do_sample, temperature, top_p, num_beams, max_new_tokens, batch_size):
+    def __init__(self, retriever, language_model, system_prompt, repeat_system_prompt, top_k_docs, stride, query_len, do_sample, temperature, top_p, num_beams, max_new_tokens, batch_size, generated_questions):
         self.retriever = retriever
         self.language_model = language_model
 
@@ -27,6 +27,7 @@ class RAG:
         self.repeat_system_prompt = repeat_system_prompt
 
         self.k = top_k_docs
+        self.generated_questions = generated_questions
         self.do_sample = do_sample
         self.temperature = temperature
         self.top_p = top_p
@@ -36,16 +37,26 @@ class RAG:
         self.max_new_tokens = max_new_tokens
         self.batch_size = batch_size
 
-    def _prompt_template(self, query, docs_text):
-        if docs_text:
-            # Format the prompt for the CICL document based context
-            system_prompt = self.system_prompt + " considering these contexts\n" if self.system_prompt else ""
+    def _prompt_template(self, query, docs_text, docs_correct_answer, docs_incorrect_answer):
+        if not self.generated_questions:
+            if docs_text:
+                # Format the prompt for the CICL document based context
+                system_prompt = self.system_prompt + " considering these contexts\n" if self.system_prompt else ""
+                repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
+                correct = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[0]) if len(docs_text) > 0 else ""
+                incorrect = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[1]) if len(docs_text) > 1 else ""
+                docs_str = f"Positive Context: {correct}.\n\nNegative Context: {incorrect}\n---\n"
+                rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
+            return self.language_model.instruct_start + rag_prompt + self.language_model.instruct_end
+
+        else:
+            system_prompt = self.system_prompt + " considering these examples\n" if self.system_prompt else ""
             repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
-            correct = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[0]) if len(docs_text) > 0 else ""
-            incorrect = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[1]) if len(docs_text) > 1 else ""
-            docs_str = f"Positive Context: {correct}.\n\nNegative Context: {incorrect}\n---\n"
+            if self.icl_kb_incorrect:
+                docs_str = "\n".join("- Question:" + question + ", Correct Answer:" + str(correct) + "\n- Question:" + question + ", Incorrect Answer:" + str(incorrect) for question, correct, incorrect  in zip(docs_text, docs_correct_answer, docs_incorrect_answer)) + "\n---\n"
+            else:
+                docs_str = "\n".join("- Question:" + question + ", Correct Answer:" + str(correct) for question, correct  in zip(docs_text, docs_correct_answer)) + "\n---\n"
             rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
-        return self.language_model.instruct_start + rag_prompt + self.language_model.instruct_end
 
 
     def evaluate(self, test_data):
@@ -155,7 +166,11 @@ class RAG:
         input_texts = []
         for docs, query in zip(retrieved_docs, queries):
             docs_text = [doc['text'] for doc in docs]
-            formatted_input = self._prompt_template(query, docs_text)
+            docs_correct_answer, docs_incorrect_answer = None, None
+            if self.generated_questions:
+                docs_correct_answer = [doc['correct_answer'] for doc in docs]
+                docs_incorrect_answer = [doc['incorrect_answer'] for doc in docs]
+            formatted_input = self._prompt_template(query, docs_text, docs_correct_answer, docs_incorrect_answer)
             input_texts.append(formatted_input)
         return input_texts
 

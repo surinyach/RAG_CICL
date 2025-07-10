@@ -1,12 +1,13 @@
 import argparse
 import pandas as pd
 import pickle
-import google.generativeai as genai
 from tqdm import tqdm
 import json
 import os
-from dotenv import load_dotenv
 import re
+
+from model.model_loader import ModelLoader
+from model.language_model import LanguageModel
 
 """
 This script generates questions and answers from the contents of a given pickle file.
@@ -20,9 +21,7 @@ as knowledge base in a Contrastive In Context Learning (CICL) RAG architecture.
 """
 
 # CONFIGURATION
-load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-MODEL_NAME = "gemini-2.5-pro"
+MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
 OUTPUT_FILE = "generated_questions.pkl"
 NUM_QUESTIONS_PER_ENTRY = 3
 
@@ -92,7 +91,7 @@ def extract_and_parse_json(raw_text: str) -> dict | None:
         print(f"Raw text received by function: \n{raw_text}")
         return None
 
-def generate_qa(entry: str) -> dict:
+def generate_qa(entry: str, language_model) -> dict:
     """
     Generates the question and answers through the LLM.
 
@@ -104,23 +103,16 @@ def generate_qa(entry: str) -> dict:
     """
 
     prompt = PROMPT_TEMPLATE.format(data = entry)
-    model = genai.GenerativeModel(MODEL_NAME)
 
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature = 0.2
-            )
-        )
-        raw_content = response.text
-        data = extract_and_parse_json(raw_content)
+        # Generate (Prompt, Do_Sample, Temperature, TopP, NumBeans, MaxNewTokens)
+        response = language_model.generate(prompt, False, 0.2, 0.1, 2, 500)
+        data = extract_and_parse_json(response)
         return data
     
     except Exception as e:
-        print(f"API call or initial response handling failed: {e}")
-        if raw_content:
-            print(f"Raw content received from model (before JSON parsing attempt): \n{raw_content}")
+        if response:
+            print(f"Raw content received from model (before JSON parsing attempt): \n{response}")
         else:
             print("No raw content received from the model due to an early API error.")
         return None
@@ -151,6 +143,18 @@ def extract_items(raw_data, column_name=None):
         raise ValueError("Unsupported pickle file format.")
 
 def main(pickle_file, column_name):
+
+    model_loader_generation = ModelLoader(
+        MODEL_NAME,
+        quant_type='4bit'
+    )
+
+    language_model = LanguageModel(
+        model_loader_generation,
+        True,
+        ("[INST]","[/INST]")
+    )
+
     with open(pickle_file, 'rb') as f:
         raw_data = pickle.load(f)
 
@@ -159,10 +163,7 @@ def main(pickle_file, column_name):
     records = []
     for entry in tqdm(items, desc="Generating questions"):
         for _ in range(NUM_QUESTIONS_PER_ENTRY):
-            # Get the first 2000 words of the entry
-            # to avoid API token expiration
-            entry = " ".join(entry.split()[:2000]) 
-            qa = generate_qa(entry)
+            qa = generate_qa(entry, language_model)
             if qa:
                 records.append({
                     "question": qa["question"],
