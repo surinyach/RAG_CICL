@@ -40,21 +40,21 @@ Answers max 15 words, no explanations or markdown.
 
 Output ONLY this JSON format:
 
-{
+{{
   "question": "...",
   "best_answer": "...",
   "correct_answers": ["...", "..."],
   "incorrect_answers": ["...", "..."]
-}
+}}
 
 Example:
 
-{
+{{
   "question": "What is the capital of Canada?",
   "best_answer": "Ottawa",
   "correct_answers": ["Ottawa", "The capital is Ottawa"],
   "incorrect_answers": ["Toronto", "Vancouver"]
-}[/INST]
+}}[/INST]
 """
 
 
@@ -95,7 +95,8 @@ def generate_qa(entry: str, language_model) -> dict:
 
     try:
         response = language_model.generate(prompt, False, 0.2, 0.1, 2, 500)
-        response = response[len(prompt):]
+        start_index = response.find('\n\n{')
+        response = response[start_index+2:]
 
         # Now parse the cleaned JSON text
         data = extract_and_parse_json(response)
