@@ -26,33 +26,35 @@ OUTPUT_FILE = "generated_questions.pkl"
 NUM_QUESTIONS_PER_ENTRY = 3
 
 # PROMPT TEMPLATE
-PROMPT_TEMPLATE = """
-You are a question generation system. Given the following input:
+PROMPT_TEMPLATE = """[INST]
+Generate a challenging question based on:
 
 "{data}"
 
-Generate a challenging, fact-based question suitable for a QA dataset. Then provide, concisely:
+Include:
 - one best answer,
-- 2 correct paraphrased answers,
-- 2 incorrect but plausible-sounding answers.
+- two correct paraphrases,
+- two plausible wrong answers.
 
-Keep all answers under 15 words. Avoid explanations or markdown formatting.
+Answers max 15 words, no explanations or markdown.
 
-Follow this example format from the TruthfulQA dataset:
+Output ONLY this JSON format:
+
+{
+  "question": "...",
+  "best_answer": "...",
+  "correct_answers": ["...", "..."],
+  "incorrect_answers": ["...", "..."]
+}
 
 Example:
-{{
+
+{
   "question": "What is the capital of Canada?",
   "best_answer": "Ottawa",
   "correct_answers": ["Ottawa", "The capital is Ottawa"],
   "incorrect_answers": ["Toronto", "Vancouver"]
-}}
-
-Now generate one based on the input:
-
-"{data}"
-
-Respond in the same JSON format.
+}[/INST]
 """
 
 
@@ -93,15 +95,10 @@ def generate_qa(entry: str, language_model) -> dict:
 
     try:
         response = language_model.generate(prompt, False, 0.2, 0.1, 2, 500)
-
-        # Remove the prompt from the start of the response
-        if response.startswith(prompt):
-            json_text = response[len(prompt):].strip()
-        else:
-            json_text = response.strip()
+        response = response[len(prompt):]
 
         # Now parse the cleaned JSON text
-        data = extract_and_parse_json(json_text)
+        data = extract_and_parse_json(response)
         return data
     
     except Exception as e:
