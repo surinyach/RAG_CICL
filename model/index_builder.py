@@ -32,9 +32,12 @@ class IndexBuilder:
         """
         Initializes the IndexBuilder class with necessary components.
         """
-        
-        self.documents = documents_df['text_en'].tolist()
+
         self.generated_questions = generated_questions
+        if not self.generated_questions:
+            self.documents = documents_df['text_en'].tolist()
+        else:
+            self.documents = documents_df['question'].tolist()
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.embedding_model = SentenceTransformer(embedding_model_name).to(self.device)
