@@ -66,29 +66,16 @@ def extract_and_parse_json(raw_text: str) -> dict | None:
     Returns:
         dict | None: The parsed JSON as a dictionary, or None if parsing fails.
     """
-    json_string = None
+
+    # Try to find the first JSON object in the text
     try:
-        # Attempt to find JSON wrapped in ```json ... ```
-        json_match = re.search(r"```json\n(.*)\n```", raw_text, re.DOTALL)
-        if json_match:
-            json_string = json_match.group(1).strip() # Extract content inside the block
-        else:
-            # Fallback: if no markdown block, assume it's pure JSON
-            json_string = raw_text.strip()
-
-        if json_string:
-            return json.loads(json_string)
-        else:
-            return None
-
-    except json.JSONDecodeError as e:
-        print(f"JSONDecodeError in extract_and_parse_json: {e}")
-        print(f"Raw text received by function: \n{raw_text}")
-        print(f"Attempted to parse JSON string: \n{json_string}")
-        return None
-    except Exception as e:
-        print(f"An unexpected error occurred in extract_and_parse_json: {e}")
-        print(f"Raw text received by function: \n{raw_text}")
+        start = raw_text.index('{')
+        end = raw_text.rindex('}') + 1
+        json_str = raw_text[start:end]
+        return json.loads(json_str)
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"JSON parsing error: {e}")
+        print(f"Raw text: {raw_text}")
         return None
 
 def generate_qa(entry: str, language_model) -> dict:
@@ -105,9 +92,16 @@ def generate_qa(entry: str, language_model) -> dict:
     prompt = PROMPT_TEMPLATE.format(data = entry)
 
     try:
-        # Generate (Prompt, Do_Sample, Temperature, TopP, NumBeans, MaxNewTokens)
         response = language_model.generate(prompt, False, 0.2, 0.1, 2, 500)
-        data = extract_and_parse_json(response)
+
+        # Remove the prompt from the start of the response
+        if response.startswith(prompt):
+            json_text = response[len(prompt):].strip()
+        else:
+            json_text = response.strip()
+
+        # Now parse the cleaned JSON text
+        data = extract_and_parse_json(json_text)
         return data
     
     except Exception as e:
