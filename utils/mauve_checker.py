@@ -30,8 +30,8 @@ def load_gpt2_dataset(file_path, num_examples=100):
 data_dir = './data'
 os.makedirs(data_dir, exist_ok=True)
 
-webtext_path = os.path.join(data_dir, 'webtext.valid.jsonl')
-gpt2_path = os.path.join(data_dir, 'webtext-xl-1542M.valid.jsonl')
+webtext_path = os.path.join(data_dir, 'amazon.valid.jsonl')
+gpt2_path = os.path.join(data_dir, 'amazon-xl-1542M.valid.jsonl')
 
 if not os.path.exists(webtext_path):
    raise ValueError("The webtext data is not in the /data path")

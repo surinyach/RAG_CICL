@@ -7,7 +7,7 @@ import os
 This script is useful to check the contents of a pickle file.
 """
 
-def print_pickle_contents(pickle_path, column=None, max_rows=5):
+def print_pickle_contents(pickle_path, column=None, max_rows=10):
     if not os.path.exists(pickle_path):
         print(f"❌ File not found: {pickle_path}")
         return

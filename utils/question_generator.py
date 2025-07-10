@@ -1,11 +1,12 @@
 import argparse
 import pandas as pd
 import pickle
-import openai
+import google.generativeai as genai
 from tqdm import tqdm
 import json
 import os
 from dotenv import load_dotenv
+import re
 
 """
 This script generates questions and answers from the contents of a given pickle file.
@@ -20,10 +21,10 @@ as knowledge base in a Contrastive In Context Learning (CICL) RAG architecture.
 
 # CONFIGURATION
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-MODEL_NAME = "gpt-4"
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+MODEL_NAME = "gemini-2.5-pro"
 OUTPUT_FILE = "generated_questions.pkl"
-NUM_QUESTIONS_PER_ENTRY = 5
+NUM_QUESTIONS_PER_ENTRY = 3
 
 # PROMPT TEMPLATE
 PROMPT_TEMPLATE = """
@@ -31,19 +32,65 @@ You are a question generation system. Given the following input:
 
 "{data}"
 
-Generate a challenging, fact-based question suitable for a QA dataset. Then provide:
+Generate a challenging, fact-based question suitable for a QA dataset. Then provide, concisely:
 - one best answer,
 - 2 correct paraphrased answers,
 - 2 incorrect but plausible-sounding answers.
 
-Format your output as JSON with the following fields:
-{
-  "question": "...",
-  "best_answer": "...",
-  "correct_answers": ["...", "..."],
-  "incorrect_answers": ["...", "..."]
-}
+Keep all answers under 15 words. Avoid explanations or markdown formatting.
+
+Follow this example format from the TruthfulQA dataset:
+
+Example:
+{{
+  "question": "What is the capital of Canada?",
+  "best_answer": "Ottawa",
+  "correct_answers": ["Ottawa", "The capital is Ottawa"],
+  "incorrect_answers": ["Toronto", "Vancouver"]
+}}
+
+Now generate one based on the input:
+
+"{data}"
+
+Respond in the same JSON format.
 """
+
+
+def extract_and_parse_json(raw_text: str) -> dict | None:
+    """
+    Extracts a JSON string from text (potentially wrapped in markdown) and parses it.
+
+    Args:
+        raw_text (str): The raw text string, possibly containing a JSON markdown block.
+
+    Returns:
+        dict | None: The parsed JSON as a dictionary, or None if parsing fails.
+    """
+    json_string = None
+    try:
+        # Attempt to find JSON wrapped in ```json ... ```
+        json_match = re.search(r"```json\n(.*)\n```", raw_text, re.DOTALL)
+        if json_match:
+            json_string = json_match.group(1).strip() # Extract content inside the block
+        else:
+            # Fallback: if no markdown block, assume it's pure JSON
+            json_string = raw_text.strip()
+
+        if json_string:
+            return json.loads(json_string)
+        else:
+            return None
+
+    except json.JSONDecodeError as e:
+        print(f"JSONDecodeError in extract_and_parse_json: {e}")
+        print(f"Raw text received by function: \n{raw_text}")
+        print(f"Attempted to parse JSON string: \n{json_string}")
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred in extract_and_parse_json: {e}")
+        print(f"Raw text received by function: \n{raw_text}")
+        return None
 
 def generate_qa(entry: str) -> dict:
     """
@@ -57,20 +104,28 @@ def generate_qa(entry: str) -> dict:
     """
 
     prompt = PROMPT_TEMPLATE.format(data = entry)
-    response = openai.ChatCompletion.create(
-        model=MODEL_NAME,
-        messages=[{"role": "user", "content": prompt}],
-        temperature = 0.7
-    )
+    model = genai.GenerativeModel(MODEL_NAME)
 
     try:
-        content = response.choices[0].message["content"]
-        data = json.loads(content)
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature = 0.2
+            )
+        )
+        raw_content = response.text
+        data = extract_and_parse_json(raw_content)
         return data
-    except Exception as e:
-        print("Failed to parse LLM response: ", e)
-        return None
     
+    except Exception as e:
+        print(f"API call or initial response handling failed: {e}")
+        if raw_content:
+            print(f"Raw content received from model (before JSON parsing attempt): \n{raw_content}")
+        else:
+            print("No raw content received from the model due to an early API error.")
+        return None
+
+
 def extract_items(raw_data, column_name=None):
     """
     Extracts the specified column of the input dataframe.
@@ -104,6 +159,9 @@ def main(pickle_file, column_name):
     records = []
     for entry in tqdm(items, desc="Generating questions"):
         for _ in range(NUM_QUESTIONS_PER_ENTRY):
+            # Get the first 2000 words of the entry
+            # to avoid API token expiration
+            entry = " ".join(entry.split()[:2000]) 
             qa = generate_qa(entry)
             if qa:
                 records.append({
