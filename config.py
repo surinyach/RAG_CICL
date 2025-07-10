@@ -75,3 +75,5 @@ configs_run = {
         }
     }
 }
+
+configs_run = generate_configurations(base_config, configs_run)

@@ -23,7 +23,6 @@ as knowledge base in a Contrastive In Context Learning (CICL) RAG architecture.
 # CONFIGURATION
 MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
 OUTPUT_FILE = "generated_questions.pkl"
-NUM_QUESTIONS_PER_ENTRY = 1
 
 # PROMPT TEMPLATE
 PROMPT_TEMPLATE = """[INST]
@@ -167,16 +166,17 @@ def main(pickle_file, column_name):
 
     records = []
     for entry in tqdm(items, desc="Generating questions"):
-        for _ in range(NUM_QUESTIONS_PER_ENTRY):
+        qa = None
+        while qa == None:
             qa = generate_qa(entry, language_model)
-            if qa:
-                records.append({
-                    "question": qa["question"],
-                    "best_answer": qa["best_answer"],
-                    "correct_answers": qa["correct_answers"],
-                    "incorrect_answers": qa["incorrect_answers"]
-                })
-    
+        
+        records.append({
+            "question": qa["question"],
+            "best_answer": qa["best_answer"],
+            "correct_answers": qa["correct_answers"],
+            "incorrect_answers": qa["incorrect_answers"]
+        })
+
     df = pd.DataFrame(records)
     df.to_pickle(OUTPUT_FILE)
     print(f"Saved {len(df)} questions to {OUTPUT_FILE}")

@@ -118,52 +118,54 @@ if __name__ == "__main__":
         print(f"Loaded {len(test_data)} questions from MMLU dataset")
 
     
-    all_results = {}
     # Evaluate all configurations
-    for configs in configs_run:
-        time = datetime.now().strftime("%m-%d_%H-%M")
-        results_dir = f'{args.output_dir}/{args.dataset}/runs_{time}'
+    time = datetime.now().strftime("%m-%d_%H-%M")
+    results_dir = f'{args.output_dir}/{args.dataset}/runs_{time}'
+    os.makedirs(results_dir, exist_ok=True)
 
-        os.makedirs(results_dir, exist_ok=True)
-        index_configs = [c['index_builder'] for c in configs.values()]
-        same_index = all(ic == index_configs[0] for ic in index_configs)
-        index_pre = None
-        first_run = True
-        
-        evaluations = {}
-        for name, config in configs.items():
-            # Initialize model loader
-            model_loader_generation = ModelLoader(config['generation_model_name'], quant_type='4bit')
-            
-            # Load knowledge base
-            if config['ralm']['generated_questions']:
-                kb = pd.read_pickle('./resources/questions.pkl')
-            else:
-                kb = pd.read_pickle('resources/articles_l3.pkl')
+    # Check if all index_builder configs are the same
+    index_configs = [c['index_builder'] for c in configs_run.values()]
+    same_index = all(ic == index_configs[0] for ic in index_configs)
+    index_pre = None
+    first_run = True
 
-            ralm, index_pre = initialize_rag(kb, config, model_loader_generation, index_pre, same_index, first_run)
-            print(f"Evaluating model: {name}")
-            evaluations[name], mauve_score = ralm.evaluate(test_data)
-        
-            del ralm
-            del model_loader_generation
-            
-            gc.collect()
-            torch.cuda.empty_cache()
-            first_run = False
-            
-            # Save evaluation results
-            evaluations[name].to_pickle(os.path.join(results_dir, f'evaluation_{name}.pkl'))
-            with open(os.path.join(results_dir, f'config_{name}.json'), 'w') as f:
-                json.dump(configs[name], f, indent=4)
-        
-            results = mean_metrics_item(evaluations[name])
-            results['mauve'] = mauve_score
+    evaluations = {}
+    all_results = {}
 
-            with open(f"{results_dir}/eval_results_{name}.json", "w") as outfile: 
-                json.dump(results, outfile)   
-            all_results[name] = results
-        del index_pre
-                
-        with open(f"{results_dir}/eval_results_all.json", "w") as outfile: 
-            json.dump(all_results, outfile)  
+    for name, config in configs_run.items():
+        # Initialize model loader
+        model_loader_generation = ModelLoader(config['generation_model_name'], quant_type='4bit')
+        
+        # Load knowledge base
+        if config['ralm']['generated_questions']:
+            kb = pd.read_pickle('./resources/questions.pkl')
+        else:
+            kb = pd.read_pickle('resources/articles_l3.pkl')
+
+        ralm, index_pre = initialize_rag(kb, config, model_loader_generation, index_pre, same_index, first_run)
+        print(f"Evaluating model: {name}")
+        evaluations[name], mauve_score = ralm.evaluate(test_data)
+        
+        del ralm
+        del model_loader_generation
+        
+        gc.collect()
+        torch.cuda.empty_cache()
+        first_run = False
+        
+        # Save evaluation results
+        evaluations[name].to_pickle(os.path.join(results_dir, f'evaluation_{name}.pkl'))
+        with open(os.path.join(results_dir, f'config_{name}.json'), 'w') as f:
+            json.dump(configs_run[name], f, indent=4)
+        
+        results = mean_metrics_item(evaluations[name])
+        results['mauve'] = mauve_score
+
+        with open(f"{results_dir}/eval_results_{name}.json", "w") as outfile: 
+            json.dump(results, outfile)   
+        all_results[name] = results
+
+    del index_pre
+
+    with open(f"{results_dir}/eval_results_all.json", "w") as outfile: 
+        json.dump(all_results, outfile)
