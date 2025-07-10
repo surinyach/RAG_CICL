@@ -57,57 +57,68 @@ Example:
 }}[/INST]
 """
 
-
-def extract_and_parse_json(raw_text: str) -> dict | None:
+def extract_and_parse_json(raw_text: str) -> list[dict]:
     """
-    Extracts a JSON string from text (potentially wrapped in markdown) and parses it.
+    Extracts all JSON objects from text and parses them.
 
     Args:
-        raw_text (str): The raw text string, possibly containing a JSON markdown block.
+        raw_text (str): The raw text string, possibly containing multiple JSON objects.
 
     Returns:
-        dict | None: The parsed JSON as a dictionary, or None if parsing fails.
+        list[dict]: A list of parsed JSON objects as dictionaries. Empty list if parsing fails.
     """
-
-    # Try to find the first JSON object in the text
-    try:
-        start = raw_text.index('{')
-        end = raw_text.rindex('}') + 1
-        json_str = raw_text[start:end]
-        return json.loads(json_str)
-    except (ValueError, json.JSONDecodeError) as e:
-        print(f"JSON parsing error: {e}")
-        print(f"Raw text: {raw_text}")
-        return None
-
-def generate_qa(entry: str, language_model) -> dict:
-    """
-    Generates the question and answers through the LLM.
-
-    Args:
-        entry(str): Data from where the questions will be generated.
+    json_objects = []
+    # Find all JSON-like structures (content between { and })
+    json_pattern = r'\{(?:[^{}]|\{[^{}]*\})*\}'
+    matches = re.findall(json_pattern, raw_text, re.DOTALL)
     
-    Returns:
-        data(json): Json with the responses of the LLM, containing the q&a. 
-    """
+    for json_str in matches:
+        try:
+            parsed_json = json.loads(json_str)
+            json_objects.append(parsed_json)
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing error for string: {json_str}\nError: {e}")
+            continue
+    
+    if not json_objects:
+        print(f"No valid JSON found in raw text: {raw_text}")
+    
+    return json_objects
 
-    prompt = PROMPT_TEMPLATE.format(data = entry)
+def generate_qa(entry: str, language_model) -> list[dict]:
+    """
+    Generates questions and answers through the LLM.
+
+    Args:
+        entry (str): Data from which the questions will be generated.
+        language_model: The language model instance to generate responses.
+
+    Returns:
+        list[dict]: List of JSON objects containing questions and answers.
+    """
+    prompt = PROMPT_TEMPLATE.format(data=entry)
 
     try:
         response = language_model.generate(prompt, False, 0.2, 0.1, 2, 500)
-        start_index = response.find('\n\n{')
-        response = response[start_index+2:]
-
-        # Now parse the cleaned JSON text
-        data = extract_and_parse_json(response)
-        return data
+        
+        qa_list = extract_and_parse_json(response)
+        
+        valid_qa = [
+            qa for qa in qa_list
+            if isinstance(qa, dict) and all(
+                key in qa for key in ["question", "best_answer", "correct_answers", "incorrect_answers"]
+            )
+        ]
+        
+        return valid_qa
     
     except Exception as e:
+        print(f"Error generating QA: {e}")
         if response:
-            print(f"Raw content received from model (before JSON parsing attempt): \n{response}")
+            print(f"Raw content received from model: \n{response}")
         else:
             print("No raw content received from the model due to an early API error.")
-        return None
+        return []
 
 
 def extract_items(raw_data, column_name=None):
