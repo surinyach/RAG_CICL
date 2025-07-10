@@ -16,7 +16,7 @@ from model.model_loader import ModelLoader
 from model.rag import RAG
 from model.retriever import Retriever
 
-from config import cicl_config
+from config import configs_run
 
 
 def parse_args():
@@ -42,7 +42,8 @@ def initialize_index_builder(knowledge_base, config):
     index_builder = IndexBuilder(
         knowledge_base,
         config['embedding_model_name'],
-        **config['index_builder']
+        config['ralm']['generated_questions']
+        **config['index_builder'],
     )
     return index_builder.initialize_components()
 
@@ -55,7 +56,7 @@ def initialize_rag(knowledge_base, config, model_loader_generation, index_pre, s
     else:
         index, doc_info = index_pre[0], index_pre[1]
 
-    retriever = Retriever(index, doc_info, config['embedding_model_name'])
+    retriever = Retriever(index, doc_info, config['embedding_model_name'], config['ralm']['generated_questions'])
     language_model = LanguageModel(
         model_loader_generation,
         config['is_chat_model'],
@@ -116,61 +117,53 @@ if __name__ == "__main__":
         test_data = test_data[['question', 'best_answer', 'correct_answers', 'incorrect_answers']].reset_index(drop=True)
         print(f"Loaded {len(test_data)} questions from MMLU dataset")
 
-    # Load knowledge base
-    knowledge_base = pd.read_pickle('resources/articles_l3.pkl')
+    
     all_results = {}
+    # Evaluate all configurations
+    for configs in configs_run:
+        time = datetime.now().strftime("%m-%d_%H-%M")
+        results_dir = f'{args.output_dir}/{args.dataset}/runs_{time}'
 
-    # Output setup
-    time = datetime.now().strftime("%m-%d_%H-%M")
-    results_dir = f'{args.output_dir}/{args.dataset}/run_{time}'
-    os.makedirs(results_dir, exist_ok=True)
+        os.makedirs(results_dir, exist_ok=True)
+        index_configs = [c['index_builder'] for c in configs.values()]
+        same_index = all(ic == index_configs[0] for ic in index_configs)
+        index_pre = None
+        first_run = True
+        
+        evaluations = {}
+        for name, config in configs.items():
+            # Initialize model loader
+            model_loader_generation = ModelLoader(config['generation_model_name'], quant_type='4bit')
+            
+            # Load knowledge base
+            if config['ralm']['generated_questions']:
+                kb = pd.read_pickle('./resources/questions.pkl')
+            else:
+                kb = pd.read_pickle('resources/articles_l3.pkl')
 
-    # Setup indexing configuration
-    index_configs = [cicl_config['index_builder']]
-    same_index = True
-    index_pre = None
-    first_run = True
+            ralm, index_pre = initialize_rag(kb, config, model_loader_generation, index_pre, same_index, first_run)
+            print(f"Evaluating model: {name}")
+            evaluations[name], mauve_score = ralm.evaluate(test_data)
+        
+            del ralm
+            del model_loader_generation
+            
+            gc.collect()
+            torch.cuda.empty_cache()
+            first_run = False
+            
+            # Save evaluation results
+            evaluations[name].to_pickle(os.path.join(results_dir, f'evaluation_{name}.pkl'))
+            with open(os.path.join(results_dir, f'config_{name}.json'), 'w') as f:
+                json.dump(configs[name], f, indent=4)
+        
+            results = mean_metrics_item(evaluations[name])
+            results['mauve'] = mauve_score
 
-    evaluations = {}
-    name = "CICL"
-
-    # Evaluation loop
-    model_loader_generation = ModelLoader(
-        cicl_config['generation_model_name'],
-        quant_type='4bit'
-    )
-
-    ralm, index_pre = initialize_rag(
-        knowledge_base,
-        cicl_config,
-        model_loader_generation,
-        index_pre,
-        same_index,
-        first_run
-    )
-
-    print(f"Evaluating model: {name}")
-    evaluations[name], mauve_score = ralm.evaluate(test_data)
-
-    del ralm
-    del model_loader_generation
-    gc.collect()
-    torch.cuda.empty_cache()
-    first_run = False
-
-    # Save evaluation results
-    evaluations[name].to_pickle(os.path.join(results_dir, f'evaluation_{name}.pkl'))
-
-    with open(os.path.join(results_dir, f'config_{name}.json'), 'w') as f:
-        json.dump(cicl_config, f, indent=4)
-
-    results = mean_metrics_item(evaluations[name])
-    results['mauve'] = mauve_score
-
-    with open(f"{results_dir}/eval_results_{name}.json", "w") as outfile:
-        json.dump(results, outfile)
-
-    all_results[name] = results
-
-    with open(f"{results_dir}/eval_results_all.json", "w") as outfile:
-        json.dump(all_results, outfile)
+            with open(f"{results_dir}/eval_results_{name}.json", "w") as outfile: 
+                json.dump(results, outfile)   
+            all_results[name] = results
+        del index_pre
+                
+        with open(f"{results_dir}/eval_results_all.json", "w") as outfile: 
+            json.dump(all_results, outfile)  

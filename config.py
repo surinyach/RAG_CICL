@@ -1,6 +1,6 @@
 from copy import deepcopy
 
-cicl_config = {
+base_config = {
     "generation_model_name": "mistralai/Mistral-7B-Instruct-v0.2",
     "embedding_model_name": "sentence-transformers/all-MiniLM-L6-v2",
     "is_chat_model": True,
@@ -23,9 +23,10 @@ cicl_config = {
         "num_beams": 2,
         "max_new_tokens": 25,
         "batch_size": 8,
+        "generated_questions": False
         }
     }
-cicl_config["index_builder"]["tokenizer_model_name"] = cicl_config["generation_model_name"]
+base_config["index_builder"]["tokenizer_model_name"] = base_config["generation_model_name"]
 
 # Generate configurations for different runs
 def generate_configurations(base_config, configs):
@@ -40,3 +41,37 @@ def generate_configurations(base_config, configs):
                 config[config_key] = value
         complete_configs[key] = config
     return complete_configs
+
+configs_run = {
+    "Document_k2": {
+    "ralm": {
+        "top_k_docs": 2,
+        }
+    },
+    "Document_k4": {
+     "ralm": {
+        "top_k_docs": 2,
+        }
+    },
+    "Document_k8": {
+     "ralm": {
+        "top_k_docs": 8,
+        }
+    },
+    "Document_k16": {
+     "ralm": {
+        "top_k_docs": 16,
+        }
+    },
+    "Document_k32": {
+     "ralm": {
+        "top_k_docs": 32,
+        }
+    },
+    "Generated_Questions": {
+        "ralm": {
+            "top_k_docs": 1,
+            "generated_questions": True
+        }
+    }
+}

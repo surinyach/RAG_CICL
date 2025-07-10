@@ -71,7 +71,7 @@ class Retriever:
             
             else:
                 generated_questions = generated_questions_batch != None
-                results_batch.append()
+                results_batch.append(self._create_result(indices))
 
 
 

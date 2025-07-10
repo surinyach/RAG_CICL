@@ -23,7 +23,7 @@ as knowledge base in a Contrastive In Context Learning (CICL) RAG architecture.
 # CONFIGURATION
 MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
 OUTPUT_FILE = "generated_questions.pkl"
-NUM_QUESTIONS_PER_ENTRY = 3
+NUM_QUESTIONS_PER_ENTRY = 1
 
 # PROMPT TEMPLATE
 PROMPT_TEMPLATE = """[INST]
@@ -54,7 +54,8 @@ Example:
   "best_answer": "Ottawa",
   "correct_answers": ["Ottawa", "The capital is Ottawa"],
   "incorrect_answers": ["Toronto", "Vancouver"]
-}}[/INST]
+}}
+[/INST]
 """
 
 
@@ -104,11 +105,11 @@ def generate_qa(entry: str, language_model) -> dict:
     Returns:
         data(json): Json with the responses of the LLM, containing the q&a. 
     """
-
+    
     prompt = PROMPT_TEMPLATE.format(data = entry)
 
     try:
-        response, finished = language_model.generate(prompt, False, 0.2, 0.1, 2, 500)
+        response, _ = language_model.generate(prompt, False, 0.2, 0.1, 2, 200)
         response = response[0][len(prompt):]
 
         data = extract_and_parse_json(response)
