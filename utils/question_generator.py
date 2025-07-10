@@ -60,24 +60,38 @@ Example:
 
 def extract_and_parse_json(raw_text: str) -> dict | None:
     """
-    Extracts a JSON string from text (potentially wrapped in markdown) and parses it.
+    Extracts a JSON string from text (possibly with extra markdown or text)
+    and parses it, expecting the format with keys:
+    question, best_answer, correct_answers, incorrect_answers.
 
     Args:
-        raw_text (str): The raw text string, possibly containing a JSON markdown block.
+        raw_text (str): The raw text string containing JSON.
 
     Returns:
-        dict | None: The parsed JSON as a dictionary, or None if parsing fails.
+        dict | None: Parsed JSON as dict or None if parsing or validation fails.
     """
 
-    # Try to find the first JSON object in the text
+    json_match = re.search(r'\{.*?\}', raw_text, re.DOTALL)
+    if not json_match:
+        print("No JSON object found in the text.")
+        return None
+
+    json_str = json_match.group(0)
+
     try:
-        start = raw_text.index('{')
-        end = raw_text.rindex('}') + 1
-        json_str = raw_text[start:end]
-        return json.loads(json_str)
-    except (ValueError, json.JSONDecodeError) as e:
+        data = json.loads(json_str)
+
+        expected_keys = {"question", "best_answer", "correct_answers", "incorrect_answers"}
+        if not expected_keys.issubset(data.keys()):
+            print(f"JSON object is missing one or more expected keys: {expected_keys}")
+            print(f"Keys found: {list(data.keys())}")
+            return None
+
+        return data
+
+    except json.JSONDecodeError as e:
         print(f"JSON parsing error: {e}")
-        print(f"Raw text: {raw_text}")
+        print(f"Raw JSON string: {json_str}")
         return None
 
 def generate_qa(entry: str, language_model) -> dict:
@@ -94,10 +108,9 @@ def generate_qa(entry: str, language_model) -> dict:
     prompt = PROMPT_TEMPLATE.format(data = entry)
 
     try:
-        response = language_model.generate(prompt, False, 0.2, 0.1, 2, 500)
-        response = response[len(PROMPT_TEMPLATE)+len(entry):]
+        response, finished = language_model.generate(prompt, False, 0.2, 0.1, 2, 500)
+        response = response[0][len(prompt):]
 
-        # Now parse the cleaned JSON text
         data = extract_and_parse_json(response)
         return data
     
