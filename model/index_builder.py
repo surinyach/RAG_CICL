@@ -28,7 +28,7 @@ class IndexBuilder:
         corpus (list of gensim.matutils.SparseVector): Gensim corpus representing documents as bag-of-words vectors.
     """
 
-    def __init__(self, documents_df, embedding_model_name, tokenizer_model_name, chunk_size, overlap, passes, generated_questions):
+    def __init__(self, documents_df, embedding_model_name,  generated_questions, tokenizer_model_name, chunk_size, overlap, passes):
         """
         Initializes the IndexBuilder class with necessary components.
         """

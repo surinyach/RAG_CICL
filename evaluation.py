@@ -42,7 +42,7 @@ def initialize_index_builder(knowledge_base, config):
     index_builder = IndexBuilder(
         knowledge_base,
         config['embedding_model_name'],
-        config['ralm']['generated_questions']
+        config['ralm']['generated_questions'],
         **config['index_builder'],
     )
     return index_builder.initialize_components()

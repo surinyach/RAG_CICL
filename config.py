@@ -43,35 +43,35 @@ def generate_configurations(base_config, configs):
     return complete_configs
 
 configs_run = {
+    "Generated_Questions": {
+    "ralm": {
+        "top_k_docs": 1,
+        "generated_questions": True
+        }
+    },
     "Document_k2": {
     "ralm": {
         "top_k_docs": 2,
         }
     },
     "Document_k4": {
-     "ralm": {
+    "ralm": {
         "top_k_docs": 2,
         }
     },
     "Document_k8": {
-     "ralm": {
+    "ralm": {
         "top_k_docs": 8,
         }
     },
     "Document_k16": {
-     "ralm": {
+    "ralm": {
         "top_k_docs": 16,
         }
     },
     "Document_k32": {
-     "ralm": {
+    "ralm": {
         "top_k_docs": 32,
-        }
-    },
-    "Generated_Questions": {
-        "ralm": {
-            "top_k_docs": 1,
-            "generated_questions": True
         }
     }
 }

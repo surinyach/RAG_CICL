@@ -37,7 +37,7 @@ class Retriever:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.embedding_model = SentenceTransformer(embedding_model_name).to(self.device)
 
-    def retrieve(self, query_batch, k, generated_questions_batch):
+    def retrieve(self, query_batch, k):
         """
         Retrieves the top-k most similar documents for each query in a batch of queries.
 
@@ -65,20 +65,17 @@ class Retriever:
             if not self.generated_questions:
                 # Get the first and the last documents
                 results_batch.append([
-                    self._create_result(indices[0], similarities[0], 0),
-                    self._create_result(indices[-1], similarities[-1], 0)
+                    self._create_result(indices[0], similarities[0]),
+                    self._create_result(indices[-1], similarities[-1])
                 ])
             
             else:
-                generated_questions = generated_questions_batch != None
-                results_batch.append(self._create_result(indices))
-
-
+                results_batch.append(self._create_result(indices, similarities))
 
         return results_batch
 
 
-    def _create_result(self, idx, score, generated_questions):
+    def _create_result(self, idx, score):
         """
         Creates/builds a result dictionary of the retrieved document.
 
@@ -99,7 +96,7 @@ class Retriever:
             "score": score
         }
     
-        if generated_questions:
+        if self.generated_questions:
             result_dict['correct_answer'] = doc["correct_answer"]
             result_dict['incorrect_answer'] = doc["incorrect_answer"]
 
