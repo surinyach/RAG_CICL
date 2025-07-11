@@ -59,7 +59,7 @@ class Retriever:
             # Convert 2D arrays into 1D arrays
             indices, similarities = indices[0], similarities[0]
 
-            if k < 2: 
+            if not self.generated_questions and k < 2: 
                 raise ValueError("k must be >= 2 to retrieve both most and least similar documents")
             
             if not self.generated_questions:
@@ -70,7 +70,7 @@ class Retriever:
                 ])
             
             else:
-                results_batch.append(self._create_result(indices, similarities))
+                results_batch.append(self._create_result(indices[0], similarities[0]))
 
         return results_batch
 
@@ -87,7 +87,6 @@ class Retriever:
             dict: Dictionary containing the document text and additional information.
         """
 
-        
         doc = self.doc_info.iloc[idx]
         # Create the result dictionary
         result_dict = {
@@ -95,8 +94,9 @@ class Retriever:
             "doc_id": doc["org_doc_id"],
             "score": score
         }
-    
+
         if self.generated_questions:
+            # Include the correct and incorrect answers for ICL KB
             result_dict['correct_answer'] = doc["correct_answer"]
             result_dict['incorrect_answer'] = doc["incorrect_answer"]
 

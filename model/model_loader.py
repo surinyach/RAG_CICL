@@ -13,7 +13,6 @@ class ModelLoader:
 
     Attributes:
         model_name (str): The name of the loaded model.
-        model_type (str): The type of the model ('causal', 'seq2seq', 'classification').
         model (transformers.PreTrainedModel): The loaded language model.
         tokenizer (transformers.PreTrainedTokenizer): The tokenizer associated with the model.
     """
@@ -24,7 +23,7 @@ class ModelLoader:
 
         Args:
             model_name (str): The name of the model to be loaded.
-            model_type (str): The type of the model to be loaded ('causal', 'seq2seq').
+            model_type (str): The type of the model to be loaded.
             quant_type (str, optional): Type of quantization ('8bit', '4bit', or None).
         """
         self.model_name = model_name

@@ -38,14 +38,11 @@ class IndexBuilder:
             self.documents = documents_df['text_en'].tolist()
         else:
             self.documents = documents_df['question'].tolist()
+            self.best_answers = documents_df['best_answer'].tolist()
+            self.incorrect_answers = documents_df['incorrect_answers'].tolist()
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.embedding_model = SentenceTransformer(embedding_model_name).to(self.device)
-
-        if self.generated_questions:
-            self.documents = documents_df['question'].tolist()
-            self.best_answers = documents_df['best_answer'].tolist()
-            self.incorrect_answers = documents_df['incorrect_answers'].tolist()
 
         if tokenizer_model_name:
             self.tokenizer =  AutoTokenizer.from_pretrained(tokenizer_model_name)
@@ -161,7 +158,7 @@ class IndexBuilder:
                 doc_dict = {"text": doc, "org_doc_id": org_doc_id}
                 if self.generated_questions:
                     doc_dict['correct_answer'] = self.best_answers[org_doc_id]
-                    doc_dict['incorrect_answer'] = self.incorrect_answers[org_doc_id]
+                    doc_dict['incorrect_answer'] = self.incorrect_answers[org_doc_id][0]
                 doc_info.append(doc_dict)
 
         return doc_info

@@ -38,8 +38,8 @@ class RAG:
         self.batch_size = batch_size
 
     def _prompt_template(self, query, docs_text, docs_correct_answer, docs_incorrect_answer):
-        if not self.generated_questions:
-            if docs_text:
+        if docs_text:
+            if not self.generated_questions:
                 # Format the prompt for the CICL document based context
                 system_prompt = self.system_prompt + " considering these contexts\n" if self.system_prompt else ""
                 repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
@@ -47,13 +47,13 @@ class RAG:
                 incorrect = re.sub(r'[\t\n\r\f\v]', ' ', docs_text[1]) if len(docs_text) > 1 else ""
                 docs_str = f"Positive Context: {correct}.\n\nNegative Context: {incorrect}\n---\n"
                 rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
-            return self.language_model.instruct_start + rag_prompt + self.language_model.instruct_end
 
-        else:
-            system_prompt = self.system_prompt + " considering these examples\n" if self.system_prompt else ""
-            repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
-            docs_str = "\n".join("- Question:" + question + ", Correct Answer:" + str(correct) + "\n- Question:" + question + ", Incorrect Answer:" + str(incorrect) for question, correct, incorrect  in zip(docs_text, docs_correct_answer, docs_incorrect_answer)) + "\n---\n"
-            rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
+            else:
+                system_prompt = self.system_prompt + " considering these examples\n" if self.system_prompt else ""
+                repeat_prompt = self.system_prompt + "\n" if self.repeat_system_prompt else ""
+                docs_str = "\n".join("- Question:" + question + ", Correct Answer:" + str(correct) + "\n- Question:" + question + ", Incorrect Answer:" + str(incorrect) for question, correct, incorrect  in zip(docs_text, docs_correct_answer, docs_incorrect_answer)) + "\n---\n"
+                rag_prompt =  f"{system_prompt}{docs_str}{repeat_prompt}Question:{query}, Correct Answer:"
+        return self.language_model.instruct_start + rag_prompt + self.language_model.instruct_end
 
     def evaluate(self, test_data):
         """

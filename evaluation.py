@@ -138,7 +138,7 @@ if __name__ == "__main__":
         
         # Load knowledge base
         if config['ralm']['generated_questions']:
-            kb = pd.read_pickle('./resources/questions.pkl')
+            kb = pd.read_pickle('./resources/generated_questions.pkl')
         else:
             kb = pd.read_pickle('resources/articles_l3.pkl')
 
