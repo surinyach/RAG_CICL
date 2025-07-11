@@ -70,7 +70,7 @@ class Retriever:
                 ])
             
             else:
-                results_batch.append(self._create_result(indices[0], similarities[0]))
+                results_batch.append([self._create_result(indices[0], similarities[0])])
 
         return results_batch
 
