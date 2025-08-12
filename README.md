@@ -117,10 +117,32 @@ This command will:
 python evaluation.py --dataset truthfulqa --outputdir ./results --seed 42
 ```
 
+## Troubleshooting
+
+### Common Issues and Solutions
+
+**SpaCy Language Model Error:**
+If you encounter an error related to `en_core_web_sm`, run:
+```bash
+python -m spacy download en_core_web_sm
+```
+
+**BitsAndBytes Installation:**
+If you continue experiencing errors after the SpaCy installation, install bitsandbytes:
+```bash
+pip install bitsandbytes
+```
+
+**Hugging Face Authentication:**
+If you don't have access to the model due to authentication requirements, log in to Hugging Face:
+```bash
+huggingface-cli login
+```
+Then enter your token when prompted.
+
+**Memory Requirements:**
+The model requires significant memory resources. Ensure you have at least **50 GB** of available storage space for comfortable execution and to avoid memory-related issues.
+
 ## Research Context
 
 This implementation explores generalization techniques for Contrastive In-Context Learning in RAG systems, contributing to the broader research on improving retrieval-augmented generation performance through enhanced context utilization.
-
-## License
-
-This project builds upon the original RAG Best Practices framework. Please refer to the original repository for licensing information.
